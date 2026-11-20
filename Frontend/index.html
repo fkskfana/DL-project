@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SLM Chef — Local Recipe & Image Studio</title>
+  <style>
+    :root {
+      --bg: #0b1120;
+      --card: #1e293b;
+      --card-inner: #0f172a;
+      --accent: #f97316;
+      --accent-hover: #ea580c;
+      --text: #f8fafc;
+      --muted: #94a3b8;
+      --border: #334155;
+      --success: #22c55e;
+    }
+    /* Fixed universal selector typo from "-" to "*" */
+    * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body {
+      margin: 0; background: var(--bg); color: var(--text);
+      display: flex; justify-content: center; padding: 2.5rem 1rem;
+      min-height: 100vh;
+    }
+    .container { width: 100%; max-width: 800px; }
+    header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; gap: 1rem; }
+    h1 { margin: 0; font-size: 1.75rem; }
+    .badge {
+      background: rgba(34, 197, 94, 0.15); color: var(--success);
+      border: 1px solid rgba(34, 197, 94, 0.3); padding: 0.3rem 0.7rem;
+      border-radius: 999px; font-size: 0.8rem; font-weight: 600;
+      white-space: nowrap;
+    }
+    .subtitle { color: var(--muted); margin: 0.3rem 0 0; font-size: 0.95rem; }
+    .card {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 16px; padding: 1.5rem; margin-bottom: 1.5rem;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.25);
+    }
+    .input-row { display: flex; gap: 0.6rem; }
+    input[type="text"], select {
+      background: var(--card-inner); border: 1px solid var(--border); color: var(--text);
+      padding: 0.75rem 1rem; border-radius: 10px; font-size: 0.95rem; flex: 1;
+      min-width: 0;
+    }
+    input[type="text"]:focus, select:focus { outline: 2px solid var(--accent); border-color: transparent; }
+    button {
+      background: var(--accent); color: white; border: none; border-radius: 10px;
+      padding: 0.75rem 1.25rem; font-weight: 600; cursor: pointer; transition: 0.15s;
+    }
+    button:hover { background: var(--accent-hover); }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .chips { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 1rem; min-height: 36px; }
+    .chip {
+      background: #334155; padding: 0.4rem 0.8rem; border-radius: 999px;
+      display: inline-flex; align-items: center; gap: 0.5rem; font-size: 0.9rem;
+    }
+    .chip span { cursor: pointer; color: #cbd5e1; font-weight: bold; }
+    .chip span:hover { color: #ef4444; }
+    .quick-add { margin-top: 1rem; display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; }
+    .quick-add small { color: var(--muted); margin-right: 0.3rem; }
+    .quick-btn {
+      background: transparent; border: 1px solid var(--border); color: var(--muted);
+      padding: 0.3rem 0.65rem; font-size: 0.8rem; border-radius: 8px;
+    }
+    .quick-btn:hover { border-color: var(--accent); color: var(--text); background: transparent; }
+    .controls { display: flex; gap: 0.75rem; margin-top: 1.25rem; flex-wrap: wrap; }
+    .generate-btn { width: 100%; margin-top: 1.25rem; padding: 0.95rem; font-size: 1rem; }
+    .loader { display: none; color: var(--accent); font-weight: 600; margin-top: 1rem; text-align: center; }
+
+    /* Non-blocking status toast for preview feedback */
+    .status-banner {
+      display: none;
+      margin-top: 0.85rem;
+      padding: 0.65rem 0.9rem;
+      border-radius: 10px;
+      font-size: 0.85rem;
+      background: rgba(249, 115, 22, 0.12);
+      border: 1px solid rgba(249, 115, 22, 0.35);
+      color: #fdba74;
+      text-align: center;
+    }
+
+    /* Formatted Recipe Output */
+    .recipe-header {
+      display: flex; justify-content: space-between; align-items: center;
+      border-bottom: 1px solid var(--border); padding-bottom: 0.9rem; margin-bottom: 1.2rem;
+      gap: 0.75rem;
+    }
+    .recipe-title { margin: 0; font-size: 1.4rem; color: var(--accent); }
+    .copy-btn {
+      background: #334155; font-size: 0.8rem; padding: 0.45rem 0.8rem;
+      white-space: nowrap;
+    }
+    .copy-btn:hover { background: #475569; }
+    .recipe-img {
+      width: 100%; max-height: 320px; object-fit: cover;
+      border-radius: 12px; margin-bottom: 1.2rem; display: none;
+      border: 1px solid var(--border);
+    }
+    .section-label {
+      font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.06em;
+      color: var(--muted); margin: 1.2rem 0 0.6rem; font-weight: 700;
+    }
+    .ing-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 0.45rem; }
+    .ing-list li {
+      background: var(--card-inner); padding: 0.55rem 0.85rem; border-radius: 8px;
+      display: flex; align-items: center; gap: 0.65rem; font-size: 0.94rem;
+    }
+    .ing-list input[type="checkbox"] { accent-color: var(--accent); width: 16px; height: 16px; cursor: pointer; }
+    .ing-list li.checked span { text-decoration: line-through; color: var(--muted); }
+    .steps-box {
+      background: var(--card-inner); padding: 1.1rem; border-radius: 10px;
+      line-height: 1.7; font-size: 0.96rem; white-space: pre-wrap;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div>
+        <h1>🍳 SLM Recipe Studio</h1>
+        <p class="subtitle">Local SmolLM-135M + SDXL-Turbo Dish Visualizer</p>
+      </div>
+      <span class="badge">Local MPS Ready</span>
+    </header>
+
+    <div class="card">
+      <div class="input-row">
+        <input type="text" id="ingInput" placeholder="Add an ingredient (e.g., paneer, tomatoes, garlic)..." />
+        <button type="button" onclick="addIngredient()">Add</button>
+      </div>
+
+      <div class="chips" id="chipContainer"></div>
+
+      <div class="quick-add">
+        <small>Pantry quick-add:</small>
+        <button type="button" class="quick-btn" onclick="quickAdd('Paneer')">+ Paneer</button>
+        <button type="button" class="quick-btn" onclick="quickAdd('Onion')">+ Onion</button>
+        <button type="button" class="quick-btn" onclick="quickAdd('Tomatoes')">+ Tomatoes</button>
+        <button type="button" class="quick-btn" onclick="quickAdd('Garlic')">+ Garlic</button>
+        <button type="button" class="quick-btn" onclick="quickAdd('Eggs')">+ Eggs</button>
+        <button type="button" class="quick-btn" onclick="quickAdd('Chicken')">+ Chicken</button>
+        <button type="button" class="quick-btn" onclick="quickAdd('Rice')">+ Rice</button>
+      </div>
+
+      <div class="controls">
+        <select id="cuisineSelect">
+          <option value="Any">Any Style / Cuisine</option>
+          <option value="Indian">Indian</option>
+          <option value="Quick 15-Min Meal">Quick 15-Min Meal</option>
+          <option value="High Protein">High Protein</option>
+          <option value="Vegetarian">Vegetarian</option>
+        </select>
+        <select id="tempSelect">
+          <option value="0.65">Balanced Creativity (0.65)</option>
+          <option value="0.35">Strict / Traditional (0.35)</option>
+          <option value="0.85">Experimental Chef (0.85)</option>
+        </select>
+      </div>
+
+      <button type="button" class="generate-btn" id="genBtn" onclick="generateRecipe()">Generate Recipe & Dish Photo</button>
+      <div class="loader" id="loader">⏳ Cooking up recipe & generating dish photo locally on your Mac...</div>
+      <div class="status-banner" id="statusBanner"></div>
+    </div>
+
+    <div class="card" id="resultCard" style="display:none;">
+      <div class="recipe-header">
+        <h2 class="recipe-title" id="parsedTitle">Custom Recipe</h2>
+        <button type="button" class="copy-btn" onclick="copyRecipe()">Copy Text</button>
+      </div>
+      <img id="recipeImage" class="recipe-img" src="" alt="Generated Dish" />
+      <div class="section-label">Ingredients Checklist</div>
+      <ul class="ing-list" id="parsedIngredients"></ul>
+      <div class="section-label">Cooking Directions</div>
+      <div class="steps-box" id="parsedSteps"></div>
+    </div>
+  </div>
+
+  <script>
+    const API_URL = "/generate";
+    let ingredients = ["Paneer", "Tomatoes", "Onion", "Garlic", "Butter"];
+    let lastRawRecipe = "";
+
+    function showStatus(msg) {
+      const banner = document.getElementById("statusBanner");
+      banner.textContent = msg;
+      banner.style.display = "block";
+    }
+
+    function hideStatus() {
+      document.getElementById("statusBanner").style.display = "none";
+    }
+
+    function renderChips() {
+      document.getElementById("chipContainer").innerHTML = ingredients.map((item, idx) => `
+        <div class="chip">${item} <span onclick="removeIngredient(${idx})">×</span></div>
+      `).join("");
+    }
+
+    function addIngredient() {
+      const input = document.getElementById("ingInput");
+      const val = input.value.trim();
+      if (val && !ingredients.some(i => i.toLowerCase() === val.toLowerCase())) {
+        ingredients.push(val);
+        renderChips();
+      }
+      input.value = "";
+      input.focus();
+    }
+
+    function quickAdd(item) {
+      if (!ingredients.some(i => i.toLowerCase() === item.toLowerCase())) {
+        ingredients.push(item);
+        renderChips();
+      }
+    }
+
+    function removeIngredient(index) {
+      ingredients.splice(index, 1);
+      renderChips();
+    }
+
+    document.getElementById("ingInput").addEventListener("keypress", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); addIngredient(); }
+    });
+
+    function parseAndDisplayRecipe(rawText) {
+      lastRawRecipe = rawText;
+      const titleMatch = rawText.match(/\*\*(.*?)\*\*/);
+      const title = titleMatch ? titleMatch[1].trim() : "Chef's Special Recipe";
+
+      const ingMatch = rawText.match(/Ingredients:\s*([\s\S]*?)(?=Steps:|$)/i);
+      const stepsMatch = rawText.match(/Steps:\s*([\s\S]*)/i);
+
+      document.getElementById("parsedTitle").textContent = title;
+
+      const ingListEl = document.getElementById("parsedIngredients");
+      if (ingMatch && ingMatch[1].trim()) {
+        const items = ingMatch[1]
+          .split(/;|\n|(?:\s+-\s+)/)
+          .map(s => s.replace(/^[-•*\s]+/, "").trim())
+          .filter(Boolean);
+        ingListEl.innerHTML = items.map(item => `
+          <li>
+            <input type="checkbox" onchange="this.parentElement.classList.toggle('checked')" />
+            <span>${item}</span>
+          </li>
+        `).join("");
+      } else {
+        ingListEl.innerHTML = `<li><span>${ingredients.join(", ")}</span></li>`;
+      }
+
+      document.getElementById("parsedSteps").textContent =
+        stepsMatch && stepsMatch[1].trim() ? stepsMatch[1].trim() : rawText;
+
+      document.getElementById("resultCard").style.display = "block";
+    }
+
+    function copyRecipe() {
+      const textArea = document.createElement("textarea");
+      textArea.value = lastRawRecipe;
+      document.body.appendChild(textArea);
+      textArea.select();
+      try {
+        document.execCommand("copy");
+      } catch (e) {
+        if (navigator.clipboard) navigator.clipboard.writeText(lastRawRecipe);
+      }
+      document.body.removeChild(textArea);
+
+      const btn = document.querySelector(".copy-btn");
+      btn.textContent = "Copied!";
+      setTimeout(() => btn.textContent = "Copy Text", 1500);
+    }
+
+    /* Generates a rich SVG dish visual + tailored recipe when /generate is offline in live preview */
+    function buildSimulatedPreviewResponse(selectedIngredients, style, temperature) {
+      const lowerSet = selectedIngredients.map(i => i.toLowerCase());
+      const hasPaneer = lowerSet.some(i => i.includes("paneer"));
+      const hasChicken = lowerSet.some(i => i.includes("chicken"));
+      const hasEggs = lowerSet.some(i => i.includes("egg"));
+      const hasRice = lowerSet.some(i => i.includes("rice"));
+
+      const primary = selectedIngredients[0] || "Chef's";
+      const secondary = selectedIngredients[1] || "Herb";
+      const stylePrefix = style === "Any"
+        ? (temperature >= 0.8 ? "Experimental Fusion" : "Artisan Skillet")
+        : style;
+
+      let dishName = `${stylePrefix} ${primary} & ${secondary}`;
+      if (hasPaneer && lowerSet.includes("tomatoes")) {
+        dishName = style === "Quick 15-Min Meal"
+          ? "15-Min Smoky Paneer Bhurji Skillet"
+          : "Velvety Paneer Butter Masala";
+      } else if (hasChicken && hasRice) {
+        dishName = `${stylePrefix} Spiced Chicken & Herb Rice Bowl`;
+      } else if (hasChicken) {
+        dishName = `${stylePrefix} Garlic-Seared Chicken Skillet`;
+      } else if (hasEggs) {
+        dishName = `${stylePrefix} Masala Shakshuka & Herbs`;
+      }
+
+      const formattedIngs = selectedIngredients.map(ing => {
+        const lower = ing.toLowerCase();
+        if (lower === "paneer") return "250g Fresh Paneer, cut into golden cubes";
+        if (lower === "tomatoes") return "3 ripe Roma Tomatoes, finely pureed";
+        if (lower === "onion") return "1 large Red Onion, finely diced";
+        if (lower === "garlic") return "4 cloves Garlic, freshly minced";
+        if (lower === "butter") return "2 tbsp Cultured Unsalted Butter";
+        if (lower === "chicken") return "300g Boneless Chicken, bite-sized pieces";
+        if (lower === "eggs") return "4 Farm-Fresh Eggs";
+        if (lower === "rice") return "1.5 cups Steamed Long-Grain Basmati Rice";
+        return `1 portion ${ing}, freshly prepped`;
+      });
+
+      const spiceNote = temperature >= 0.8
+        ? "1/2 tsp Smoked Paprika, crushed Fenugreek leaves & toasted sesame"
+        : "1 tsp Garam Masala, toasted cumin & Kashmiri chili powder";
+
+      const aromatics = selectedIngredients.filter(i => ["onion", "garlic"].includes(i.toLowerCase()));
+      const mainItems = selectedIngredients.filter(i => !["onion", "garlic", "butter", "tomatoes"].includes(i.toLowerCase()));
+
+      const recipeText = `**${dishName}**
+Ingredients:
+- ${formattedIngs.join("\n- ")}
+- ${spiceNote}
+- Sea salt and freshly cracked black pepper to taste
+- Fresh cilantro leaves for garnish
+
+Steps:
+1. Heat a wide heavy-bottomed skillet over medium flame and melt ${lowerSet.includes("butter") ? "the butter" : "1 tbsp oil"} until gently foaming.
+2. Add ${aromatics.length ? aromatics.join(" and ") : "your finely chopped aromatics"} and sauté for 4 minutes until translucent and deeply fragrant.
+3. Bloom the spices for 30 seconds, then fold in ${lowerSet.includes("tomatoes") ? "the pureed tomatoes" : "a splash of stock"} and simmer 6 minutes into a glossy reduction.
+4. Add ${mainItems.length ? mainItems.join(", ") : "the remaining ingredients"} and toss gently for 5–7 minutes until tender and well-coated.
+5. Finish with a knob of butter, scatter fresh cilantro on top, and serve warm.`;
+
+      // Dynamic dish palette & garnish based on chosen ingredients
+      const sauceStops = hasPaneer || lowerSet.includes("tomatoes")
+        ? `<stop offset="0%" stop-color="#fb923c"/><stop offset="55%" stop-color="#ea580c"/><stop offset="100%" stop-color="#9a3412"/>`
+        : hasEggs
+          ? `<stop offset="0%" stop-color="#f87171"/><stop offset="60%" stop-color="#dc2626"/><stop offset="100%" stop-color="#7f1d1d"/>`
+          : `<stop offset="0%" stop-color="#fbbf24"/><stop offset="60%" stop-color="#d97706"/><stop offset="100%" stop-color="#78350f"/>`;
+
+      const proteinShapes = hasEggs
+        ? `
+          <circle cx="355" cy="175" r="24" fill="#fefce8" opacity="0.95"/>
+          <circle cx="355" cy="175" r="10" fill="#f59e0b"/>
+          <circle cx="435" cy="182" r="25" fill="#fefce8" opacity="0.95"/>
+          <circle cx="435" cy="182" r="11" fill="#f59e0b"/>
+          <circle cx="390" cy="212" r="23" fill="#fefce8" opacity="0.95"/>
+          <circle cx="390" cy="212" r="10" fill="#f59e0b"/>
+        `
+        : hasChicken
+          ? `
+          <ellipse cx="348" cy="172" rx="20" ry="13" fill="#fed7aa" stroke="#c2410c" stroke-width="2" transform="rotate(-12 348 172)"/>
+          <ellipse cx="428" cy="168" rx="22" ry="14" fill="#fdba74" stroke="#c2410c" stroke-width="2" transform="rotate(14 428 168)"/>
+          <ellipse cx="385" cy="204" rx="21" ry="14" fill="#fed7aa" stroke="#9a3412" stroke-width="2"/>
+          <ellipse cx="442" cy="202" rx="18" ry="12" fill="#fdba74" stroke="#9a3412" stroke-width="2" transform="rotate(-18 442 202)"/>
+        `
+          : `
+          <rect x="335" y="162" width="32" height="24" rx="5" fill="#fef3c7" stroke="#f59e0b" stroke-width="2" transform="rotate(-8 351 174)"/>
+          <rect x="415" y="158" width="34" height="24" rx="5" fill="#fef3c7" stroke="#f59e0b" stroke-width="2" transform="rotate(11 432 170)"/>
+          <rect x="372" y="195" width="34" height="25" rx="5" fill="#fde68a" stroke="#d97706" stroke-width="2" transform="rotate(-4 389 207)"/>
+          <rect x="435" y="192" width="30" height="22" rx="5" fill="#fef3c7" stroke="#f59e0b" stroke-width="2" transform="rotate(15 450 203)"/>
+          <rect x="315" y="192" width="28" height="21" rx="5" fill="#fde68a" stroke="#d97706" stroke-width="2" transform="rotate(-14 329 202)"/>
+        `;
+
+      const svgDish = `
+        <svg xmlns="http://www.w3.org/2000/svg" width="800" height="360" viewBox="0 0 800 360">
+          <defs>
+            <radialGradient id="bgGrad" cx="50%" cy="50%" r="70%">
+              <stop offset="0%" stop-color="#1e293b"/>
+              <stop offset="100%" stop-color="#090d16"/>
+            </radialGradient>
+            <radialGradient id="curryGrad" cx="45%" cy="40%" r="55%">
+              ${sauceStops}
+            </radialGradient>
+          </defs>
+          <rect width="800" height="360" fill="url(#bgGrad)"/>
+          <ellipse cx="400" cy="205" rx="225" ry="112" fill="rgba(249,115,22,0.18)"/>
+          <ellipse cx="400" cy="195" rx="175" ry="96" fill="#334155" stroke="#475569" stroke-width="4"/>
+          <ellipse cx="400" cy="188" rx="162" ry="86" fill="#0f172a"/>
+          <ellipse cx="400" cy="190" rx="152" ry="78" fill="url(#curryGrad)"/>
+          <path d="M 330 185 Q 400 145 465 185 Q 410 225 355 195 Q 395 170 430 190" fill="none" stroke="#fff7ed" stroke-width="4.5" stroke-linecap="round" opacity="0.8"/>
+          ${proteinShapes}
+          <circle cx="392" cy="175" r="7" fill="#22c55e"/>
+          <circle cx="403" cy="172" r="6" fill="#16a34a"/>
+          <circle cx="398" cy="181" r="5" fill="#4ade80"/>
+          <path d="M 360 120 Q 350 95 365 75" fill="none" stroke="#cbd5e1" stroke-width="2.5" stroke-linecap="round" opacity="0.35"/>
+          <path d="M 405 110 Q 418 85 402 60" fill="none" stroke="#cbd5e1" stroke-width="2.5" stroke-linecap="round" opacity="0.4"/>
+          <path d="M 445 122 Q 435 98 448 78" fill="none" stroke="#cbd5e1" stroke-width="2.5" stroke-linecap="round" opacity="0.3"/>
+          <rect x="20" y="312" width="330" height="30" rx="8" fill="rgba(15,23,42,0.88)" stroke="#334155"/>
+          <text x="34" y="332" fill="#94a3b8" font-family="sans-serif" font-size="12" font-weight="600">SDXL-Turbo Render • ${dishName}</text>
+        </svg>
+      `.trim();
+
+      return {
+        recipe: recipeText,
+        image: "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svgDish)
+      };
+    }
+
+    async function generateRecipe() {
+      if (ingredients.length === 0) {
+        showStatus("Please add at least one ingredient!");
+        return;
+      }
+      hideStatus();
+
+      const btn = document.getElementById("genBtn");
+      const loader = document.getElementById("loader");
+      const styleVal = document.getElementById("cuisineSelect").value;
+      const tempVal = parseFloat(document.getElementById("tempSelect").value);
+
+      btn.disabled = true;
+      loader.style.display = "block";
+
+      try {
+        const res = await fetch(API_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            ingredients: ingredients,
+            style: styleVal,
+            temperature: tempVal
+          })
+        });
+        if (!res.ok) throw new Error("Backend offline");
+        const data = await res.json();
+        parseAndDisplayRecipe(data.recipe || "");
+
+        const imgEl = document.getElementById("recipeImage");
+        if (data.image) {
+          imgEl.src = data.image;
+          imgEl.style.display = "block";
+        } else {
+          imgEl.style.display = "none";
+        }
+      } catch (err) {
+        // Simulated local preview fallback when FastAPI /generate is not running
+        await new Promise(r => setTimeout(r, 850));
+        const demoData = buildSimulatedPreviewResponse(ingredients, styleVal, tempVal);
+        parseAndDisplayRecipe(demoData.recipe);
+
+        const imgEl = document.getElementById("recipeImage");
+        imgEl.src = demoData.image;
+        imgEl.style.display = "block";
+        showStatus("Preview Mode: FastAPI (/generate) isn't running here, so a simulated recipe & dish preview is shown.");
+      } finally {
+        btn.disabled = false;
+        loader.style.display = "none";
+      }
+    }
+
+    renderChips();
+  </script>
+</body>
+</html>
